@@ -1,0 +1,160 @@
+
+Backend:
+Cluster Creation:
+EKS Cluster Process:
+created ec2 instance(ubuntu,t2.medium,80GB)
+Created IAM role with full access and attached to created ec2 instance
+Installed eksctl inside ec2 instance
+eksctl Install:
+    #curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+    #sudo mv /tmp/eksctl /usr/local/bin
+    #eksctl version
+    #aws s3 ls
+check whether aws cli install or not
+	search aws cli install for linux
+	search ekctl create cluster
+	#vim cluster.yml
+
+ apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: wisecow-app
+  region: eu-west-1
+
+nodeGroups:
+  - name: wisecow-app
+    instanceType: t2.medium
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 2
+    volumeSize: 20
+    ssh:
+      enableSsm: true
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+ 
+
+ #eksctl create cluster -f cluster.yml
+Check vpc and autoscaling group created or not then delete
+  - kubectl download:
+    #curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    #chmod +x kubectl
+    #mv kubectl /usr/bin/
+
+  - kubectl get svc 
+
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.100.0.1   <none>        443/TCP   16m
+
+Ingress Setup:
+Policy:
+  - curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
+
+
+aws iam create-policy \
+    --policy-name wisecow-app-ingress-policy \
+    --policy-document file://iam_policy.json
+
+Copy the arn : arn:aws:iam::298211120117:policy/wisecow-app-ingress-policy
+eksctl:
+
+  eksctl utils associate-iam-oidc-provider --region=ap-southeast-1 --cluster=<cluster name> --approve
+eksctl create iamserviceaccount \
+  --cluster=wisecow-app --region=eu-west-1\
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --role-name wisecow-app-ingress-role \ 
+  --attach-policy-arn= arn:aws:iam::298211120117:policy/wisecow-app-ingress-policy \
+  --approve
+
+cert-manager:
+  kubectl apply \
+    --validate=false \
+    -f https://github.com/jetstack/cert-manager/releases/download/v1.13.5/cert-manager.yaml
+
+
+
+AWS Load Balancer Controller:
+  curl -Lo v2_7_2_full.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.7.2/v2_7_2_full.yaml
+  sed -i.bak -e '596,604d' ./v2_7_2_full.yaml
+sed -i.bak -e 's|your-cluster-name|wisecow-app|' ./v2_7_2_full.yaml
+kubectl apply -f v2_7_2_full.yaml
+  curl -Lo v2_7_2_ingclass.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.7.2/v2_7_2_ingclass.yaml
+  kubectl apply -f v2_7_2_ingclass.yaml
+
+kubectl get pods -A
+create docker image and push to ECR
+
+create wisecow-deployment.yml
+create wisecow-service.yml
+#kubectl apply -f wisecow-deployment.yml
+#kubectl apply -f wisecow-service.yml
+kubectl get pods
+kubectl get pods -A
+kubectl get svc
+setup ingress controller apply:
+search “aws LB controller install sample ingress”
+install that
+# ls 
+# cat 2048_full.yml | yq     -------from here copied the code
+
+
+vim ingress.yml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: dev
+  name: wisecow-app
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wisecow-srv
+                port:
+                  number: 4499
+
+Set Up Your Repository
+Inside the .github/workflows directory, create a file named ci-cd.yml
+Access GitHub Secrets
+Add Secrets   DOCKER_USERNAME,DOCKER_PASSWORD,REGISTRY
+git add .github/workflows/ci-cd.yml
+git commit -m "Add CI/CD pipeline"
+git push
+verify deployments
+kubectl get pods
+kubectl get services
+Install Ingress Controller
+Create a file named wisecow-ingress.yaml
+kubectl apply -f wisecow-ingress.yaml
+test on browser: <Ip_Add>:4499
+
+Task-->2
+create system_health_monitor.sh
+chmod +x system_health_monitor.sh   ---->script executable
+./system_health_monitor.sh   ----->run script
+cat /var/log/system_health.log  ----->check logs
+create automated_backup_solution.sh
+chmod +x backup.sh
+./backup.sh
+cat /var/log/backup.log
+
+
+
+
+          
+
+
+
+
+
